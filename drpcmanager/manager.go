@@ -189,6 +189,8 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 
 			stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
 			go m.manageStream(ctx, stream)
+			str := string(pkt.Data)
+			fmt.Println(str)
 			return stream, string(pkt.Data), nil
 		}
 	}

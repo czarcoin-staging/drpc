@@ -5,14 +5,17 @@ package drpcconn
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/spacemonkeygo/monkit/v3"
 	"github.com/zeebo/errs"
 
 	"storj.io/drpc"
 	"storj.io/drpc/drpcmanager"
 	"storj.io/drpc/drpcstream"
 	"storj.io/drpc/drpcwire"
+	"storj.io/drpc/internal"
 )
 
 // Options controls configuration settings for a conn.
@@ -58,6 +61,10 @@ func (c *Conn) Close() (err error) {
 	return c.man.Close()
 }
 
+const INVOKE_HEADER_VERSION_1 = 1
+const INVOKE_HEADER_TRACEID = "trace-id"
+const INVOKE_HEADER_PARENTID = "parent-id"
+
 // Invoke issues the rpc on the transport serializing in, waits for a response, and
 // deserializes it into out. Only one Invoke or Stream may be open at a time.
 func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (err error) {
@@ -65,6 +72,32 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	defer mon.TaskNamed("invoke" + rpc)(&ctx)(&err)
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
+
+	headers := internal.InvokeHeader{
+		Version: INVOKE_HEADER_VERSION_1,
+		Headers: make(map[string][]byte),
+	}
+
+	headers.Headers["fooo"] = []byte("bar")
+	headers.Headers["fooo2"] = []byte("bar2")
+
+	headerData, err := proto.Marshal(&headers)
+	fmt.Println(headerData)
+
+	span := monkit.SpanFromCtx(ctx)
+	if span != nil {
+		fmt.Println(span.Trace().Id())
+		fmt.Println(span.Id())
+		fmt.Println(span.Parent().Id())
+	}
+
+	//span.Annotations()[0].
+
+	// headers2 := internal.InvokeHeader{}
+	// err = proto.Unmarshal(headerData, &headers2)
+	// version := headers2.Version
+	// foo := headers2.Headers["fooo2"]
+	// fmt.Printf("%d\t%s\n", version, foo)
 
 	data, err := proto.Marshal(in)
 	if err != nil {
