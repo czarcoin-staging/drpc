@@ -5,7 +5,7 @@ package drpcconn
 
 import (
 	"context"
-	"fmt"
+	"encoding/binary"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/spacemonkeygo/monkit/v3"
@@ -73,31 +73,38 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	mon.Event("outgoing_requests")
 	mon.Event("outgoing_invokes")
 
-	headers := internal.InvokeHeader{
-		Version: INVOKE_HEADER_VERSION_1,
-		Headers: make(map[string][]byte),
+	msg := make([]byte, 2)
+	header := internal.Invoke{
+		Version: internal.INVOKE_HEADER_VERSION_1,
+		Header:  make(map[string][]byte),
 	}
 
-	headers.Headers["fooo"] = []byte("bar")
-	headers.Headers["fooo2"] = []byte("bar2")
-
-	headerData, err := proto.Marshal(&headers)
-	fmt.Println(headerData)
+	traceIDBuf := make([]byte, binary.MaxVarintLen64)
+	parentIDBuf := make([]byte, binary.MaxVarintLen64)
+	spanIDBuf := make([]byte, binary.MaxVarintLen64)
 
 	span := monkit.SpanFromCtx(ctx)
 	if span != nil {
-		fmt.Println(span.Trace().Id())
-		fmt.Println(span.Id())
-		fmt.Println(span.Parent().Id())
+		binary.PutVarint(traceIDBuf, span.Trace().Id())
+		binary.PutVarint(parentIDBuf, span.Parent().Id())
+		binary.PutVarint(spanIDBuf, span.Id())
+		header.Header[internal.INVOKE_HEADER_TRACEID] = traceIDBuf
+		header.Header[internal.INVOKE_HEADER_PARENTID] = parentIDBuf
+		header.Header["span-id"] = spanIDBuf
 	}
 
-	//span.Annotations()[0].
+	headerData, err := proto.Marshal(&header)
+	if err != nil {
+		return errs.Wrap(err)
+	}
 
-	// headers2 := internal.InvokeHeader{}
-	// err = proto.Unmarshal(headerData, &headers2)
-	// version := headers2.Version
-	// foo := headers2.Headers["fooo2"]
-	// fmt.Printf("%d\t%s\n", version, foo)
+	if len(headerData) > 255 {
+		return errs.New("header data is too big")
+	}
+
+	msg = append(msg, byte(len(headerData)+1))
+	msg = append(msg, []byte(headerData)...)
+	msg = append(msg, []byte(rpc)...)
 
 	data, err := proto.Marshal(in)
 	if err != nil {
@@ -110,7 +117,7 @@ func (c *Conn) Invoke(ctx context.Context, rpc string, in, out drpc.Message) (er
 	}
 	defer func() { err = errs.Combine(err, stream.Close()) }()
 
-	if err := c.doInvoke(stream, []byte(rpc), data, out); err != nil {
+	if err := c.doInvoke(stream, msg, data, out); err != nil {
 		return err
 	}
 	return nil

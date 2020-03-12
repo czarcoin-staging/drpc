@@ -6,39 +6,7 @@ option go_package = "internal";
 
 package invoke;
 
-message InvokeHeader {
+message Invoke {
     uint32 version = 1;
-    map<string, bytes> headers = 2;
-
-    map<string, string> headers2 = 2;
-    headers2["foo"] = "100"
+    map<string, bytes> header = 2;
 }
-
-[128]byte
-
-/*
-InvokeHeader["trace-id"] = span.Trace().ID 
-InvokeHeader["parent-id"] = span.Parent().ID
-InvokeHeader["span-id"] = span.ID
-
-InvokeHeader["user-id"] = "12345"
-
-for k, v := range span.Annotations {
-    headers[k] = v
-}
-
-for k, v := range InvokeHeader {
-    if IsKnownHeader(k) == false {
-        // This is an annotation
-    }
-}
-
-func IsKnownHeader(name string) bool {
-    if name == INVOKE_HEADER_TRACEID {
-        return true
-    } else if name == INVOKE_HEADER_SPANID {
-        return true
-    }
-
-}
-*/
