@@ -114,7 +114,6 @@ func (s *Stream) Finished() bool { return s.sigs.finish.IsSet() }
 // any major errors that should terminate the transport the stream is operating on as
 // well as a boolean indicating if the stream expects more packets.
 func (s *Stream) HandlePacket(pkt drpcwire.Packet) (more bool, err error) {
-	defer mon.Task()(s.monCtx())(&err)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -267,7 +266,6 @@ func (s *Stream) terminate(err error) {
 
 // RawWrite sends the data bytes with the given kind.
 func (s *Stream) RawWrite(kind drpcwire.Kind, data []byte) (err error) {
-	defer mon.Task()(s.monCtx())(&err)
 
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -409,8 +407,6 @@ func (s *Stream) CloseSend() (err error) {
 // the provided error, and terminates the stream. It is a no-op if the stream is already
 // terminated.
 func (s *Stream) Cancel(err error) {
-	defer mon.Task()(s.monCtx())(nil)
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

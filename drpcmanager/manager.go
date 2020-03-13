@@ -26,6 +26,8 @@ var managerClosed = errs.New("manager closed")
 
 var versionByte = make([]byte, 2)
 
+const remoteParentKey = 2
+
 // Options controls configuration settings for a manager.
 type Options struct {
 	// WriterBufferSize controls the size of the buffer that we will fill before
@@ -209,19 +211,26 @@ func (m *Manager) NewServerStream(ctx context.Context) (stream *drpcstream.Strea
 				if n == 0 {
 					return nil, "", err
 				}
-				spanID, n := binary.Varint(clientSpan.Header["span-id"])
+				parentID, n := binary.Varint(clientSpan.Header[internal.INVOKE_HEADER_PARENTID])
 				if n == 0 {
 					return nil, "", err
 				}
-				f := mon.Func()
-				f.RemoteTrace(&m.ctx, spanID, monkit.NewTrace(traceID))
+				// spanID, n := binary.Varint(clientSpan.Header["span-id"])
+				// if n == 0 {
+				// 	return nil, "", err
+				// }
+
+				trace := monkit.NewTrace(traceID)
+				trace.Set(remoteParentKey, parentID)
+				m.ctx = monkit.ResetContextSpan(m.ctx)
+				defer mon.Func().RemoteTrace(&m.ctx, monkit.NewId(), trace)(&err)
+				span := monkit.SpanFromCtx(m.ctx)
+				fmt.Println(span.Func().FullName())
 				pkt.Data = data[headerBoundary:]
 			}
 
 			stream = drpcstream.NewWithOptions(m.ctx, pkt.ID.Stream, m.wr, m.opts.Stream)
 			go m.manageStream(ctx, stream)
-			str := string(pkt.Data)
-			fmt.Println(str)
 			return stream, string(pkt.Data), nil
 		}
 	}
